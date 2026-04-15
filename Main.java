@@ -6,7 +6,7 @@ import java.time.format.DateTimeParseException;
 public class Main {
     private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm");
 
-    // ANSI Color Codes
+    // ANSI Color Codes (empty strings – no colors)
     private static final String RESET = "";
     private static final String RED = "";
     private static final String GREEN = "";
@@ -15,10 +15,9 @@ public class Main {
     private static final String WHITE = "";
     private static final String BOLD = "";
 
-    // Global scanner (shared across all classes to avoid input issues)
     private static Scanner globalScanner;
 
-    // Store managers as static fields so all methods can access them
+    // Manager references
     private static ExploreService exploreService;
     private static FlightManagement flightManager;
     private static PassengerManagement passengerManager;
@@ -32,22 +31,14 @@ public class Main {
 
     public static void main(String[] args) {
         ConsoleUtils.clearScreen();
-
         globalScanner = new Scanner(System.in);
-        // Enable ANSI colors on Windows CMD
         if (System.getProperty("os.name").contains("Windows")) {
             try {
                 new ProcessBuilder("cmd", "/c", "echo off").start().waitFor();
-
-            } catch (Exception e) {
-                // Ignore
-            }
+            } catch (Exception e) {}
         }
-        globalScanner = new Scanner(System.in);
 
-        // ============================================================
-        // INITIALIZE ALL MANAGERS
-        // ============================================================
+        // Initialize managers
         gateManager = new GateManagement();
         runwayManager = new RunwayManagement();
         flightManager = new FlightManagement(gateManager, runwayManager);
@@ -56,23 +47,15 @@ public class Main {
         weatherManager = new WeatherManager();
         authManager = new AuthManager();
         exploreService = new ExploreService(flightManager);
-
         departureManager = new DepartureFlightManager(flightManager, passengerManager);
         arrivalManager = new ArrivalFlightManager(flightManager);
-
-        // BookingManagement with shared scanner
         bookingManager = new BookingManagement(flightManager, passengerManager, globalScanner);
 
-        // Set references in FlightManagement
         flightManager.setWeatherManager(weatherManager);
         flightManager.setDepartureManager(departureManager);
         flightManager.setArrivalManager(arrivalManager);
 
-        // ============================================================
-        // MAIN APPLICATION LOOP
-        // ============================================================
         boolean exit = false;
-
         while (!exit) {
             ConsoleUtils.clearScreen();
             printLogo();
@@ -81,6 +64,8 @@ public class Main {
             System.out.println("  " + CYAN + "2" + RESET + ". Passenger Sign Up");
             System.out.println("  " + CYAN + "3" + RESET + ". Passenger Sign In");
             System.out.println("  " + CYAN + "4" + RESET + ". Admin Login");
+            System.out.println("  " + CYAN + "5" + RESET + ". Check-in (Guest)");
+            System.out.println("  " + CYAN + "6" + RESET + ". Get Boarding Pass (Guest)");
             System.out.println("  " + YELLOW + "0" + RESET + ". Exit");
             printSeparator();
             System.out.print("  Enter choice: ");
@@ -106,6 +91,12 @@ public class Main {
                         adminMenu();
                     }
                     break;
+                case "5":
+                    guestCheckIn();
+                    break;
+                case "6":
+                    guestBoardingPass();
+                    break;
                 case "0":
                     exit = true;
                     System.out.println(GREEN + "\n  Thank you for using Airport Management System. Goodbye!" + RESET);
@@ -118,9 +109,7 @@ public class Main {
         globalScanner.close();
     }
 
-    // ============================================================
-    // EXPLORE FLIGHTS (Guest)
-    // ============================================================
+    // ==================== EXPLORE FLIGHTS ====================
     private static void exploreFlightsMenu() {
         boolean back = false;
         while (!back) {
@@ -162,22 +151,16 @@ public class Main {
         }
     }
 
-    // ============================================================
-    // PASSENGER AUTHENTICATION
-    // ============================================================
+    // ==================== PASSENGER AUTHENTICATION ====================
     private static void passengerSignUp() {
         clearScreen();
         printHeader("PASSENGER SIGN UP");
-
         System.out.print("  Enter Full Name: ");
         String fullName = globalScanner.nextLine().trim();
-
         System.out.print("  Enter Username (min 4 chars, letters/numbers/_.): ");
         String username = globalScanner.nextLine().trim();
-
         System.out.print("  Enter Email (gmail.com, yahoo.com, outlook.com only): ");
         String email = globalScanner.nextLine().trim();
-
         System.out.print("  Enter Password (min 8 chars, upper/lower/number/special): ");
         String password = globalScanner.nextLine().trim();
 
@@ -190,10 +173,8 @@ public class Main {
     private static AppUser passengerSignIn() {
         clearScreen();
         printHeader("PASSENGER SIGN IN");
-
         System.out.print("  Enter Username: ");
         String username = globalScanner.nextLine().trim();
-
         System.out.print("  Enter Password: ");
         String password = globalScanner.nextLine().trim();
 
@@ -209,9 +190,7 @@ public class Main {
         }
     }
 
-    // ============================================================
-    // PASSENGER PORTAL
-    // ============================================================
+    // ==================== PASSENGER PORTAL ====================
     private static void passengerPortal(AppUser passenger) {
         boolean logout = false;
         while (!logout) {
@@ -260,15 +239,11 @@ public class Main {
         }
     }
 
-    // ============================================================
-    // PASSENGER SELF-SERVICE METHODS
-    // ============================================================
     private static void checkInPassenger() {
         clearScreen();
         printHeader("CHECK-IN");
         System.out.print("  Enter Ticket ID: ");
         String ticketId = globalScanner.nextLine().trim();
-
         System.out.print("  Enter current simulation time (yyyy-MM-ddTHH:mm): ");
         LocalDateTime simTime = getUserSimulationTime();
         if (simTime != null) {
@@ -282,7 +257,6 @@ public class Main {
         printHeader("BOARDING PASS");
         System.out.print("  Enter Ticket ID: ");
         String ticketId = globalScanner.nextLine().trim();
-
         System.out.print("  Enter current simulation time (yyyy-MM-ddTHH:mm): ");
         LocalDateTime simTime = getUserSimulationTime();
         if (simTime != null) {
@@ -302,16 +276,43 @@ public class Main {
         waitForEnter();
     }
 
-    // ============================================================
-    // ADMIN LOGIN
-    // ============================================================
+    // ==================== GUEST METHODS (with name verification) ====================
+    private static void guestCheckIn() {
+        clearScreen();
+        printHeader("GUEST CHECK-IN");
+        System.out.print("  Enter Ticket ID: ");
+        String ticketId = globalScanner.nextLine().trim();
+        System.out.print("  Enter Passenger Name (as on ticket): ");
+        String name = globalScanner.nextLine().trim();
+        System.out.print("  Enter current simulation time (yyyy-MM-ddTHH:mm): ");
+        LocalDateTime simTime = getUserSimulationTime();
+        if (simTime != null) {
+            passengerManager.checkIn(ticketId, name, simTime);
+        }
+        waitForEnter();
+    }
+
+    private static void guestBoardingPass() {
+        clearScreen();
+        printHeader("GUEST BOARDING PASS");
+        System.out.print("  Enter Ticket ID: ");
+        String ticketId = globalScanner.nextLine().trim();
+        System.out.print("  Enter Passenger Name (as on ticket): ");
+        String name = globalScanner.nextLine().trim();
+        System.out.print("  Enter current simulation time (yyyy-MM-ddTHH:mm): ");
+        LocalDateTime simTime = getUserSimulationTime();
+        if (simTime != null) {
+            passengerManager.processBoarding(ticketId, name, simTime);
+        }
+        waitForEnter();
+    }
+
+    // ==================== ADMIN LOGIN ====================
     private static AppUser adminLogin() {
         clearScreen();
         printHeader("ADMIN LOGIN");
-
         System.out.print("  Enter Username: ");
         String username = globalScanner.nextLine().trim();
-
         System.out.print("  Enter Password: ");
         String password = globalScanner.nextLine().trim();
 
@@ -327,9 +328,7 @@ public class Main {
         }
     }
 
-    // ============================================================
-    // ADMIN MENU (Full Management)
-    // ============================================================
+    // ==================== ADMIN MENU ====================
     private static void adminMenu() {
         boolean back = false;
         while (!back) {
@@ -384,9 +383,7 @@ public class Main {
         }
     }
 
-    // ============================================================
-    // ADMIN SUB-MENUS
-    // ============================================================
+    // ==================== ADMIN SUB-MENUS ====================
     private static void flightManagementMenu() {
         boolean back = false;
         while (!back) {
@@ -667,21 +664,15 @@ public class Main {
         }
     }
 
-    // ============================================================
-    // SIMULATION
-    // ============================================================
     private static void runSimulation() {
         clearScreen();
         printHeader("SIMULATION SETUP");
-
         System.out.print("  Enter start time (yyyy-MM-ddTHH:mm): ");
         LocalDateTime start = getUserSimulationTime();
         if (start == null) return;
-
         System.out.print("  Enter end time (yyyy-MM-ddTHH:mm): ");
         LocalDateTime end = getUserSimulationTime();
         if (end == null) return;
-
         System.out.print("  Enter time step in minutes (1 recommended): ");
         int step;
         try {
@@ -697,9 +688,7 @@ public class Main {
         globalScanner.nextLine();
     }
 
-    // ============================================================
-    // UTILITY METHODS
-    // ============================================================
+    // ==================== UTILITY METHODS ====================
     private static void clearScreen() {
         try {
             System.out.print("\033[H\033[2J");
@@ -720,17 +709,16 @@ public class Main {
         System.out.println("         AIRPORT MANAGEMENT SYSTEM         ");
         System.out.println("----------------------------------------------------------");
     }
+
     private static void printHeader(String title) {
         int width = 50;
         int padding = (width - title.length()) / 2;
-        // Use standard characters instead of ╔ ═ ╚
         System.out.println("\n+" + "-".repeat(width) + "+");
         System.out.println("|" + " ".repeat(padding) + title + " ".repeat(width - title.length() - padding) + "|");
         System.out.println("+" + "-".repeat(width) + "+");
     }
 
     private static void printSeparator() {
-        // Use standard dashes instead of fancy bars
         System.out.println("-".repeat(60));
     }
 
