@@ -27,31 +27,144 @@ public class PassengerManagement {
         loadPassengersFromFile();
     }
 
-    // ============================================================
-    // FILE OPERATIONS (unchanged)
-    // ============================================================
-    private void loadPassengersFromFile() { /* same as original */ }
-    public void savePassengersToFile() { /* same */ }
-    private void saveRemovedPassengers(List<Passenger> removedPassengers) { /* same */ }
-    public void saveCancelledBooking(Passenger p) { /* same */ }
-    public void clearRemovedPassengersFile() { /* same */ }
-    public void clearCancelledBookingsFile() { /* same */ }
-    private Passenger findPassengerByTicket(String ticketId) { /* same */ }
-    public List<Passenger> getAllPassengers() { return passengers; }
-    public void updatePassengersFlightTimes(String flightInstanceId, LocalDateTime newDepartTime) { /* same */ }
-    public void cancelBooking(Passenger p) { /* same */ }
-    public void freePassengersOfFlight(String flightInstanceId) { /* same */ }
-    public void addPassenger(Passenger p) { /* same */ }
-    public void displayPassengers() { /* same */ }
-    public void displayCancelledBookings() { /* same */ }
+    private void loadPassengersFromFile() {
+        try (BufferedReader br = new BufferedReader(new FileReader(passengerFilePath))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] parts = line.split(",");
+                if (parts.length < 10) continue;
 
-    // ============================================================
-    // CHECK-IN METHODS (overloaded for name verification)
-    // ============================================================
+                String ticketId = parts[0];
+                String name = parts[1];
+                String flightInstanceId = parts[2];
+                String origin = parts[3];
+                String destination = parts[4];
+                LocalDateTime journeyDateTime = LocalDateTime.parse(parts[5]);
+                LocalDateTime checkInStartTime = LocalDateTime.parse(parts[6]);
+                boolean hasCheckedIn = Boolean.parseBoolean(parts[7]);
+                boolean boardingPassIssued = Boolean.parseBoolean(parts[8]);
+                String gateId = parts[9];
 
-    // Original method (used by logged‑in passengers – no name check)
+                List<String> seats = new ArrayList<>();
+                if (parts.length > 10 && parts[10] != null && !parts[10].isEmpty()) {
+                    String[] seatArray = parts[10].split(";");
+                    for (String s : seatArray) seats.add(s.trim());
+                }
+
+                int totalPrice = 0;
+                if (parts.length > 11 && parts[11] != null && !parts[11].isEmpty()) {
+                    try {
+                        totalPrice = Integer.parseInt(parts[11]);
+                    } catch (NumberFormatException e) {
+                        totalPrice = 0;
+                    }
+                }
+
+                Passenger p = new Passenger(ticketId, name, flightInstanceId, origin, destination,
+                        journeyDateTime, checkInStartTime, hasCheckedIn, boardingPassIssued, gateId,
+                        seats, totalPrice);
+                passengers.add(p);
+            }
+        } catch (FileNotFoundException e) {
+            System.out.println(YELLOW + "Passenger file not found. Creating new file." + RESET);
+            savePassengersToFile();
+        } catch (IOException e) {
+            System.out.println(RED + "Error loading passengers: " + e.getMessage() + RESET);
+        }
+    }
+
+    public void savePassengersToFile() {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(passengerFilePath))) {
+            for (Passenger p : passengers) {
+                bw.write(p.toFileString());
+                bw.newLine();
+            }
+        } catch (IOException e) {
+            System.out.println(RED + "Error saving passengers: " + e.getMessage() + RESET);
+        }
+    }
+
+    private void saveRemovedPassengers(List<Passenger> removedPassengers) {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(passengerRemovedFilePath, true))) {
+            for (Passenger p : removedPassengers) {
+                bw.write(p.toFileString());
+                bw.newLine();
+            }
+        } catch (IOException e) {
+            System.out.println(RED + "Error saving removed passengers: " + e.getMessage() + RESET);
+        }
+    }
+
+    public void saveCancelledBooking(Passenger p) {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(cancelledBookingsFilePath, true))) {
+            bw.write(p.toFileString());
+            bw.newLine();
+        } catch (IOException e) {
+            System.out.println(RED + "Error saving cancelled booking: " + e.getMessage() + RESET);
+        }
+    }
+
+    public void clearRemovedPassengersFile() {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(passengerRemovedFilePath))) {
+            bw.write("");
+            System.out.println(GREEN + "Removed passengers list cleared." + RESET);
+        } catch (IOException e) {
+            System.out.println(RED + "Error clearing removed passengers file: " + e.getMessage() + RESET);
+        }
+    }
+
+    public void clearCancelledBookingsFile() {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(cancelledBookingsFilePath))) {
+            bw.write("");
+            System.out.println(GREEN + "Cancelled bookings list cleared." + RESET);
+        } catch (IOException e) {
+            System.out.println(RED + "Error clearing cancelled bookings file: " + e.getMessage() + RESET);
+        }
+    }
+
+    private Passenger findPassengerByTicket(String ticketId) {
+        for (Passenger p : passengers) {
+            if (p.getTicketId().equals(ticketId))
+                return p;
+        }
+        return null;
+    }
+
+    public List<Passenger> getAllPassengers() {
+        return passengers;
+    }
+
+    public void updatePassengersFlightTimes(String flightInstanceId, LocalDateTime newDepartTime) {
+        LocalDateTime newCheckInStart = newDepartTime.minusHours(2);
+        boolean updated = false;
+
+        for (Passenger p : passengers) {
+            if (p.getFlightInstanceId().equals(flightInstanceId)) {
+                p.setJourneyDateTime(newDepartTime);
+                p.setCheckInStartTime(newCheckInStart);
+                updated = true;
+            }
+        }
+
+        if (updated) {
+            savePassengersToFile();
+            System.out.println(CYAN + "Updated flight times for passengers of " + flightInstanceId + RESET);
+            System.out.println("   New departure: " + newDepartTime);
+            System.out.println("   New check-in start: " + newCheckInStart);
+        }
+    }
+
+    public void cancelBooking(Passenger p) {
+        saveCancelledBooking(p);
+        passengers.remove(p);
+        savePassengersToFile();
+        System.out.println(GREEN + "Booking cancelled for passenger: " + p.getPassengerName() + RESET);
+    }
+
+    // ==================== CHECK‑IN (overloaded) ====================
+    // Original method (used by logged‑in passengers)
     public void checkIn(String ticketId, LocalDateTime currentTime) {
-        checkIn(ticketId, null, currentTime);  // call overloaded version with null name
+        checkIn(ticketId, null, currentTime);
     }
 
     // New method with optional name verification (pass null to skip name check)
@@ -67,15 +180,16 @@ public class PassengerManagement {
             return;
         }
 
-        // === Existing check‑in logic (copy from your original method) ===
         if (p.isBoardingPassIssued()) {
             System.out.println(YELLOW + " Boarding pass already issued." + RESET);
             return;
         }
+
         if (p.hasCheckedIn()) {
             System.out.println(YELLOW + " Already checked in. Please proceed to gate." + RESET);
             return;
         }
+
         Flight flight = flightManagement.FindFlightByInstanceId(p.getFlightInstanceId());
         if (flight == null) {
             System.out.println(RED + " Flight not found." + RESET);
@@ -112,6 +226,7 @@ public class PassengerManagement {
             }
             return;
         }
+
         if (currentTime.isAfter(flightCheckInEnd)) {
             System.out.println(RED + " Sorry! Check-in is closed." + RESET);
             System.out.println("   Check-in closed at: " + flightCheckInEnd);
@@ -152,11 +267,8 @@ public class PassengerManagement {
         System.out.println("   Please proceed to gate before boarding closes.\n");
     }
 
-    // ============================================================
-    // BOARDING PASS METHODS (overloaded for name verification)
-    // ============================================================
-
-    // Original method (logged‑in passengers)
+    // ==================== BOARDING PASS (overloaded) ====================
+    // Original method (used by logged‑in passengers)
     public void processBoarding(String ticketId, LocalDateTime currentTime) {
         processBoarding(ticketId, null, currentTime);
     }
@@ -173,11 +285,11 @@ public class PassengerManagement {
             return;
         }
 
-        // === Existing boarding pass logic (copy from your original method) ===
         if (p.isBoardingPassIssued()) {
             System.out.println(YELLOW + " Boarding pass already issued." + RESET);
             return;
         }
+
         if (!p.hasCheckedIn()) {
             System.out.println(RED + "Please check in first at the counter." + RESET);
             return;
@@ -217,12 +329,14 @@ public class PassengerManagement {
             System.out.println("   Please return in " + minutesUntilBoarding + " minutes.");
             return;
         }
+
         if (currentTime.isAfter(flightBoardingClose)) {
             System.out.println(RED + " Sorry! Boarding is over." + RESET);
             System.out.println("   Boarding closed at: " + flightBoardingClose);
             System.out.println("   Flight departed at: " + flightDepartTime);
             return;
         }
+
         if (!"BOARDING".equalsIgnoreCase(flight.getStatus())) {
             System.out.println(RED + " Flight not boarding yet." + RESET);
             System.out.println("   Boarding starts at: " + flightBoardingStart);
@@ -259,10 +373,98 @@ public class PassengerManagement {
         System.out.println("   Please board the plane now.\n");
     }
 
-    // ============================================================
-    // HELPER METHODS (unchanged)
-    // ============================================================
-    private String truncate(String str, int maxLen) { /* same */ }
-    private String padRight(String s, int width) { /* same */ }
-    private String centerText(String text, int width) { /* same */ }
+    public void freePassengersOfFlight(String flightInstanceId) {
+        List<Passenger> toRemove = new ArrayList<>();
+        for (Passenger p : passengers) {
+            if (p.getFlightInstanceId().equals(flightInstanceId)) {
+                toRemove.add(p);
+            }
+        }
+
+        if (!toRemove.isEmpty()) {
+            saveRemovedPassengers(toRemove);
+            passengers.removeAll(toRemove);
+            savePassengersToFile();
+            System.out.println(GREEN + "Freed " + toRemove.size() + " passengers for flight " + flightInstanceId + "." + RESET);
+        }
+    }
+
+    public void addPassenger(Passenger p) {
+        passengers.add(p);
+        savePassengersToFile();
+    }
+
+    // ==================== DISPLAY METHODS ====================
+    public void displayPassengers() {
+        if (passengers.isEmpty()) {
+            System.out.println(YELLOW + "\n⚠️ No passengers found." + RESET);
+            return;
+        }
+
+        System.out.println("\n" + CYAN + "═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════" + RESET);
+        System.out.println(CYAN + "                                            PASSENGER MANAGEMENT SYSTEM" + RESET);
+        System.out.println(CYAN + "═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════" + RESET);
+        System.out.printf(CYAN + "║ " + WHITE + "%-8s " + CYAN + "║ " + WHITE + "%-20s " + CYAN + "║ " + WHITE + "%-18s " + CYAN + "║ " + WHITE + "%-8s " + CYAN + "║ " + WHITE + "%-8s " + CYAN + "║ " + WHITE + "%-19s " + CYAN + "║ " + WHITE + "%-19s " + CYAN + "║ " + WHITE + "%-4s " + CYAN + "║ " + WHITE + "%-4s " + CYAN + "║ " + WHITE + "%-5s " + CYAN + "║ " + WHITE + "%-8s " + CYAN + "║ " + WHITE + "%-6s " + CYAN + "║" + RESET + "\n",
+                "Ticket", "Name", "Flight", "Origin", "Dest", "Journey DateTime", "Check-in Start", "CkIn", "Brd", "Gate", "Seats", "Price");
+        System.out.println(CYAN + "═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════" + RESET);
+
+        for (Passenger p : passengers) {
+            String checkedIn = p.hasCheckedIn() ? (GREEN + "✓" + RESET) : (RED + "✗" + RESET);
+            String boardingPass = p.isBoardingPassIssued() ? (GREEN + "✓" + RESET) : (RED + "✗" + RESET);
+            String seatsStr = p.getSeats().isEmpty() ? "-" : String.join(",", p.getSeats());
+            String gateId = p.getGateId().equals("-") ? "—" : p.getGateId();
+
+            System.out.printf(CYAN + "║ " + WHITE + "%-8s " + CYAN + "║ " + WHITE + "%-20s " + CYAN + "║ " + WHITE + "%-18s " + CYAN + "║ " + WHITE + "%-8s " + CYAN + "║ " + WHITE + "%-8s " + CYAN + "║ " + WHITE + "%-19s " + CYAN + "║ " + WHITE + "%-19s " + CYAN + "║ " + RESET + "%-4s " + CYAN + "║ " + RESET + "%-4s " + CYAN + "║ " + WHITE + "%-5s " + CYAN + "║ " + WHITE + "%-8s " + CYAN + "║ " + GREEN + "%-6s " + CYAN + "║" + RESET + "\n",
+                    truncate(p.getTicketId(), 8),
+                    truncate(p.getPassengerName(), 20),
+                    truncate(p.getFlightInstanceId(), 18),
+                    truncate(p.getOrigin(), 8),
+                    truncate(p.getDestination(), 8),
+                    truncate(p.getJourneyDateTime().toString(), 19),
+                    truncate(p.getCheckInStartTime().toString(), 19),
+                    checkedIn,
+                    boardingPass,
+                    gateId,
+                    truncate(seatsStr, 8),
+                    "৳" + p.getTotalPrice());
+        }
+        System.out.println(CYAN + "═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════" + RESET);
+        System.out.println(GREEN + "\n Total passengers: " + passengers.size() + RESET + "\n");
+    }
+
+    public void displayCancelledBookings() {
+        try (BufferedReader br = new BufferedReader(new FileReader(cancelledBookingsFilePath))) {
+            String line;
+            boolean empty = true;
+            System.out.println("\n" + YELLOW + "╔══════════════════════════════════════════════════════════════╗" + RESET);
+            System.out.println(YELLOW + "║                    CANCELLED BOOKINGS                      ║" + RESET);
+            System.out.println(YELLOW + "╚══════════════════════════════════════════════════════════════╝" + RESET);
+
+            while ((line = br.readLine()) != null) {
+                empty = false;
+                String[] parts = line.split(",");
+                if (parts.length >= 12) {
+                    System.out.println(CYAN + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" + RESET);
+                    System.out.println("   Ticket ID: " + parts[0]);
+                    System.out.println("   Passenger: " + parts[1]);
+                    System.out.println("   Flight: " + parts[2]);
+                    System.out.println("   Route: " + parts[3] + " → " + parts[4]);
+                    System.out.println("   Seats: " + (parts[9].isEmpty() ? "-" : parts[9]));
+                    System.out.println("   Total Paid: ৳" + parts[11]);
+                }
+            }
+            if (empty) {
+                System.out.println(YELLOW + "   No cancelled bookings found." + RESET);
+            }
+            System.out.println();
+        } catch (IOException e) {
+            System.out.println(YELLOW + "   No cancelled bookings found." + RESET);
+        }
+    }
+
+    private String truncate(String str, int maxLen) {
+        if (str == null) return "";
+        if (str.length() <= maxLen) return str;
+        return str.substring(0, maxLen - 3) + "...";
+    }
 }
